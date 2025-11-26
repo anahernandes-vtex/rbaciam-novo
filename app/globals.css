@@ -1,0 +1,244 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body.rbac-body {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  background: linear-gradient(180deg, #fdf2f8 0%, #ffffff 45%, #f3f4f6 100%);
+  color: #111827;
+}
+
+main {
+  width: 100%;
+}
+
+.rbac-wrapper {
+  width: 100%;
+  max-width: 960px;
+  margin: 32px auto;
+  padding: 0 16px;
+}
+
+.rbac-card {
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 24px 24px 28px;
+  box-shadow: 0 18px 40px rgba(248, 113, 169, 0.25);
+  border: 1px solid rgba(248, 113, 169, 0.3);
+}
+
+.rbac-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rbac-title {
+  margin: 12px 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.rbac-subtitle {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.rbac-search-row {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.rbac-search-group {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rbac-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4b5563;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.rbac-input, .rbac-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  background-color: #f9fafb;
+}
+
+.rbac-input:focus, .rbac-select:focus {
+  border-color: #f973c5;
+  box-shadow: 0 0 0 1px rgba(236, 72, 153, 0.25);
+  background-color: #ffffff;
+}
+
+.rbac-help {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.rbac-empty {
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+  padding: 32px 8px 8px;
+}
+
+.rbac-result-header {
+  margin-top: 20px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rbac-result-caption {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+}
+
+.rbac-result-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 2px 0 0;
+}
+
+.rbac-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #fdf2f8;
+  color: #be185d;
+  border: 1px solid #f9a8d4;
+}
+
+.rbac-access-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rbac-access-item {
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 10px 12px;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease;
+}
+
+.rbac-access-item:hover {
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.rbac-access-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.rbac-access-system {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rbac-access-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rbac-access-badge.auto {
+  background: #ecfdf3;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.rbac-access-badge.req {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.rbac-access-badge.other {
+  background: #f9fafb;
+  color: #4b5563;
+  border-color: #e5e7eb;
+}
+
+.rbac-access-classification {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+@media (max-width: 640px) {
+  .rbac-wrapper {
+    margin-top: 16px;
+  }
+
+  .rbac-card {
+    padding: 18px 16px 22px;
+    border-radius: 20px;
+  }
+
+  .rbac-title {
+    font-size: 22px;
+  }
+
+  .rbac-result-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

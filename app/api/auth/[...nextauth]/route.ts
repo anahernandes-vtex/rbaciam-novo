@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import type { NextAuthOptions } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 
 const options: NextAuthOptions = {
   providers: [
@@ -20,10 +21,9 @@ const options: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      session.user = {
-        ...session.user,
-        accessToken: token.accessToken as string,
-      };
+      if (session.user) {
+        (session.user as any).accessToken = token.accessToken as string;
+      }
       return session;
     },
   },

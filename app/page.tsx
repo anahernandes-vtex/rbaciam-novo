@@ -1,5 +1,8 @@
 "use client";
 
+import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useMemo, useState } from "react";
 import data from "../data/matrix.json";
 
@@ -31,8 +34,17 @@ function getAccessType(classification: string): "automatic" | "request" | "other
 }
 
 export default function HomePage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [selectedTeamName, setSelectedTeamName] = useState("");
+
+  useEffect(() => {
+    // Se o usuário não está autenticado, redireciona para login
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);
 
   // Lista de times ordenada para o dropdown
   const teamNames = useMemo(
@@ -54,13 +66,49 @@ export default function HomePage() {
     }
   }
 
+  if (status === "loading") {
+    return (
+      <main>
+        <div className="rbac-wrapper">
+          <div className="rbac-card">
+            <p style={{ textAlign: "center" }}>Carregando...</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main>
       <div className="rbac-wrapper">
         <div className="rbac-card">
-          <div style={{ textAlign: "center", marginBottom: 4 }}>
-            <span className="rbac-badge">RBAC · IAM</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+            <div style={{ textAlign: "center", flex: 1 }}>
+              <span className="rbac-badge">RBAC · IAM</span>
+            </div>
+            {session?.user && (
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <span style={{ fontSize: "12px", color: "#6b7280" }}>
+                  {session.user.email}
+                </span>
+                <button
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  style={{
+                    padding: "6px 12px",
+                    fontSize: "12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    backgroundColor: "#f3f4f6",
+                    cursor: "pointer",
+                    color: "#374151",
+                  }}
+                >
+                  Sair
+                </button>
+              </div>
+            )}
           </div>
+
           <h1 className="rbac-title">Consulta de Acessos por Time</h1>
           <p className="rbac-subtitle">
             Selecione um time na lista ou digite o nome exatamente como está na matriz

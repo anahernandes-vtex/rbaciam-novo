@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "RBAC IAM – Consulta de Acessos",
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="rbac-body">
-        {children}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

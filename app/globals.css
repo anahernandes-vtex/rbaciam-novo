@@ -78,6 +78,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  position: relative;
 }
 
 .rbac-label {
@@ -108,6 +109,36 @@ main {
 .rbac-help {
   font-size: 11px;
   color: #9ca3af;
+}
+
+/* Autocomplete list styles */
+.rbac-autocomplete-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin-top: 8px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15,23,42,0.06);
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 40;
+  padding: 6px 4px;
+  list-style: none;
+}
+
+.rbac-autocomplete-item {
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #111827;
+}
+
+.rbac-autocomplete-item.highlight,
+.rbac-autocomplete-item:hover {
+  background: #f3f4f6;
 }
 
 .rbac-empty {

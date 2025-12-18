@@ -2,8 +2,7 @@
 
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import data from "../data/matrix.json";
 
 type Access = {
@@ -36,8 +35,10 @@ function getAccessType(classification: string): "automatic" | "request" | "other
 export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const [inputValue, setInputValue] = useState("");
   const [selectedTeamName, setSelectedTeamName] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState<number | null>(null);
 
   useEffect(() => {
     // Se o usuário não está autenticado, redireciona para login
@@ -51,20 +52,70 @@ export default function HomePage() {
     () => teams.map((t) => t.team).sort((a, b) => a.localeCompare(b, "pt-BR")),
     []
   );
+  // Filtra times para o autocomplete com base no valor do input
+  const filteredTeamNames = useMemo(() => {
+    const q = inputValue.trim().toLowerCase();
+    if (!q) return teamNames;
+    return teamNames.filter((t) => t.toLowerCase().includes(q));
+  }, [inputValue, teamNames]);
 
-  // Time escolhido (via digitação ou dropdown)
+  // Time escolhido (via digitação ou seleção)
   const activeTeam = useMemo(() => {
-    const name = (selectedTeamName || query).trim();
+    const name = (selectedTeamName || inputValue).trim();
     if (!name) return null;
     return teams.find((t) => t.team.toLowerCase() === name.toLowerCase()) ?? null;
-  }, [query, selectedTeamName]);
+  }, [inputValue, selectedTeamName]);
 
   function handleSelectChange(value: string) {
     setSelectedTeamName(value);
-    if (value) {
-      setQuery(value);
+    setInputValue(value);
+    setIsOpen(false);
+    setHighlighted(null);
+  }
+
+  // Comportamento de teclado no campo
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!isOpen) {
+      if (e.key === "ArrowDown") setIsOpen(true);
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      setHighlighted((h) => {
+        const next = h === null ? 0 : Math.min(filteredTeamNames.length - 1, h + 1);
+        return next;
+      });
+      e.preventDefault();
+    } else if (e.key === "ArrowUp") {
+      setHighlighted((h) => {
+        if (h === null) return Math.max(0, filteredTeamNames.length - 1);
+        return Math.max(0, h - 1);
+      });
+      e.preventDefault();
+    } else if (e.key === "Enter") {
+      if (highlighted !== null) {
+        handleSelectChange(filteredTeamNames[highlighted]);
+        e.preventDefault();
+      }
+    } else if (e.key === "Escape") {
+      setIsOpen(false);
+      setHighlighted(null);
     }
   }
+
+  // Fecha o dropdown ao clicar fora
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+        setHighlighted(null);
+      }
+    }
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
 
   if (status === "loading") {
     return (
@@ -116,39 +167,48 @@ export default function HomePage() {
           </p>
 
           <div className="rbac-search-row">
-            <div className="rbac-search-group">
-              <label className="rbac-label">Nome do time (texto)</label>
+            <div className="rbac-search-group" ref={containerRef}>
+              <label className="rbac-label">Pesquisar time</label>
               <input
                 className="rbac-input"
-                placeholder="Ex.: Ad Network, Engineering - cloud-insights-fo..."
-                value={query}
+                placeholder="Digite para buscar e selecione um time..."
+                value={inputValue}
                 onChange={(e) => {
-                  setQuery(e.target.value);
+                  setInputValue(e.target.value);
                   setSelectedTeamName("");
+                  setIsOpen(true);
                 }}
+                onFocus={() => setIsOpen(true)}
+                onKeyDown={handleKeyDown}
+                aria-autocomplete="list"
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
               />
               <span className="rbac-help">
-                A busca é exata pelo nome do time, igual na planilha.
+                Digite parte do nome do time para filtrar e escolha na lista.
               </span>
-            </div>
 
-            <div className="rbac-search-group">
-              <label className="rbac-label">Ou escolha na lista</label>
-              <select
-                className="rbac-select"
-                value={selectedTeamName}
-                onChange={(e) => handleSelectChange(e.target.value)}
-              >
-                <option value="">Selecione um time...</option>
-                {teamNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-              <span className="rbac-help">
-                Esta lista vem diretamente da matriz RBAC.
-              </span>
+              {isOpen && filteredTeamNames.length > 0 && (
+                <ul className="rbac-autocomplete-list" role="listbox">
+                  {filteredTeamNames.map((name, idx) => (
+                    <li
+                      key={name}
+                      role="option"
+                      aria-selected={highlighted === idx}
+                      className={`rbac-autocomplete-item ${highlighted === idx ? 'highlight' : ''}`}
+                      onMouseEnter={() => setHighlighted(idx)}
+                      onMouseLeave={() => setHighlighted(null)}
+                      onMouseDown={(e) => {
+                        // onMouseDown to select before blur
+                        e.preventDefault();
+                        handleSelectChange(name);
+                      }}
+                    >
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 

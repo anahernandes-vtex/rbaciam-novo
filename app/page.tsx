@@ -8,6 +8,9 @@ import data from "../data/matrix.json";
 type Access = {
   system: string;
   classification: string;
+  profile: string;
+  role: string;
+  teams: string;
 };
 
 type Team = {
@@ -53,10 +56,57 @@ export default function HomePage() {
     []
   );
   // Filtra times para o autocomplete com base no valor do input
+  type MatchEntry = { name: string; score: number; indices: number[] };
+
+  function fuzzyMatch(q: string, text: string): MatchEntry | null {
+    const ql = q.toLowerCase();
+    const tl = text.toLowerCase();
+    if (!ql) return { name: text, score: 0, indices: [] };
+
+    // Full substring match (best)
+    const idx = tl.indexOf(ql);
+    if (idx !== -1) {
+      return { name: text, score: 100 - Math.max(0, idx), indices: Array.from({ length: ql.length }, (_, i) => idx + i) };
+    }
+
+    // Subsequence match (characters in order)
+    const indices: number[] = [];
+    let qi = 0;
+    for (let i = 0; i < tl.length && qi < ql.length; i++) {
+      if (tl[i] === ql[qi]) {
+        indices.push(i);
+        qi++;
+      }
+    }
+    if (qi === ql.length) {
+      // score based on compactness of indices and length ratio
+      const span = indices[indices.length - 1] - indices[0] + 1;
+      const compactness = ql.length / span; // closer to 1 is better
+      const density = ql.length / tl.length;
+      const score = Math.round(50 + compactness * 30 + density * 20);
+      return { name: text, score, indices };
+    }
+
+    // Partial matches (some chars matched) - lower score
+    if (indices.length > 0) {
+      const score = Math.round(10 + (indices.length / ql.length) * 40);
+      return { name: text, score, indices };
+    }
+
+    return null;
+  }
+
   const filteredTeamNames = useMemo(() => {
-    const q = inputValue.trim().toLowerCase();
-    if (!q) return teamNames;
-    return teamNames.filter((t) => t.toLowerCase().includes(q));
+    const q = inputValue.trim();
+    if (!q) return teamNames.map((n) => ({ name: n, score: 0, indices: [] }));
+
+    const results: MatchEntry[] = [];
+    for (const name of teamNames) {
+      const m = fuzzyMatch(q, name);
+      if (m && m.score >= 10) results.push(m);
+    }
+    results.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "pt-BR"));
+    return results.slice(0, 50);
   }, [inputValue, teamNames]);
 
   // Time escolhido (via digitação ou seleção)
@@ -94,7 +144,7 @@ export default function HomePage() {
       e.preventDefault();
     } else if (e.key === "Enter") {
       if (highlighted !== null) {
-        handleSelectChange(filteredTeamNames[highlighted]);
+        handleSelectChange(filteredTeamNames[highlighted].name);
         e.preventDefault();
       }
     } else if (e.key === "Escape") {
@@ -162,63 +212,111 @@ export default function HomePage() {
 
           <h1 className="rbac-title">Consulta de Acessos por Time</h1>
           <p className="rbac-subtitle">
-            Selecione um time na lista ou digite o nome exatamente como está na matriz
-            para ver os sistemas e o tipo de acesso (automático ou mediante request).
+            Selecione um time na lista ou digite para buscar e autocompletar
+            para ver os sistemas, tipo de acesso, perfil, role e times associados.
           </p>
 
           <div className="rbac-search-row">
             <div className="rbac-search-group" ref={containerRef}>
               <label className="rbac-label">Pesquisar time</label>
-              <input
-                className="rbac-input"
-                placeholder="Digite para buscar e selecione um time..."
-                value={inputValue}
-                onChange={(e) => {
-                  setInputValue(e.target.value);
-                  setSelectedTeamName("");
-                  setIsOpen(true);
-                }}
-                onFocus={() => setIsOpen(true)}
-                onKeyDown={handleKeyDown}
-                aria-autocomplete="list"
-                aria-expanded={isOpen}
-                aria-haspopup="listbox"
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  className="rbac-input"
+                  placeholder="Digite para buscar ou selecione um time..."
+                  value={inputValue}
+                  onChange={(e) => {
+                    setInputValue(e.target.value);
+                    setSelectedTeamName("");
+                    setIsOpen(true);
+                  }}
+                  onFocus={() => setIsOpen(true)}
+                  onKeyDown={handleKeyDown}
+                  aria-autocomplete="list"
+                  aria-expanded={isOpen}
+                  aria-haspopup="listbox"
+                  style={{ paddingRight: "40px" }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    right: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    pointerEvents: "none",
+                    color: "#9ca3af",
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path
+                      d="M4 6L8 10L12 6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              </div>
               <span className="rbac-help">
                 Digite parte do nome do time para filtrar e escolha na lista.
               </span>
 
               {isOpen && filteredTeamNames.length > 0 && (
                 <ul className="rbac-autocomplete-list" role="listbox">
-                  {filteredTeamNames.map((name, idx) => (
-                    <li
-                      key={name}
-                      role="option"
-                      aria-selected={highlighted === idx}
-                      className={`rbac-autocomplete-item ${highlighted === idx ? 'highlight' : ''}`}
-                      onMouseEnter={() => setHighlighted(idx)}
-                      onMouseLeave={() => setHighlighted(null)}
-                      onMouseDown={(e) => {
-                        // onMouseDown to select before blur
-                        e.preventDefault();
-                        handleSelectChange(name);
-                      }}
-                    >
-                      {name}
-                    </li>
-                  ))}
+                  {filteredTeamNames.map((entry, idx) => {
+                    const name = entry.name;
+                    const indices = entry.indices;
+
+                    // Render highlighted name using indices
+                    const parts: React.ReactNode[] = [];
+                    if (indices.length === 0) {
+                      parts.push(name);
+                    } else if (indices.length === name.length) {
+                      parts.push(<mark key={0} className="rbac-match">{name}</mark>);
+                    } else {
+                      let last = 0;
+                      for (let i = 0; i < indices.length; i++) {
+                        const idxChar = indices[i];
+                        if (idxChar > last) parts.push(name.slice(last, idxChar));
+                        parts.push(
+                          <mark key={i} className="rbac-match">
+                            {name[idxChar]}
+                          </mark>
+                        );
+                        last = idxChar + 1;
+                      }
+                      if (last < name.length) parts.push(name.slice(last));
+                    }
+
+                    return (
+                      <li
+                        key={name}
+                        role="option"
+                        aria-selected={highlighted === idx}
+                        className={`rbac-autocomplete-item ${highlighted === idx ? "highlight" : ""}`}
+                        onMouseEnter={() => setHighlighted(idx)}
+                        onMouseLeave={() => setHighlighted(null)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleSelectChange(name);
+                        }}
+                      >
+                        <div>{parts}</div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
           </div>
 
-          {!activeTeam && !query && !selectedTeamName && (
+          {!activeTeam && !inputValue && !selectedTeamName && (
             <p className="rbac-empty">
               Digite o nome de um time ou selecione na lista para ver os acessos.
             </p>
           )}
 
-          {!activeTeam && (query || selectedTeamName) && (
+          {!activeTeam && (inputValue || selectedTeamName) && (
             <p className="rbac-empty">
               Nenhum time encontrado com esse nome. Verifique se está igual à planilha.
             </p>
@@ -265,6 +363,26 @@ export default function HomePage() {
                           {acc.classification}
                         </p>
                       )}
+                      <div className="rbac-access-details">
+                        {acc.profile && (
+                          <div className="rbac-access-detail-item">
+                            <span className="rbac-detail-label">Perfil:</span>
+                            <span className="rbac-detail-value">{acc.profile}</span>
+                          </div>
+                        )}
+                        {acc.role && (
+                          <div className="rbac-access-detail-item">
+                            <span className="rbac-detail-label">Role:</span>
+                            <span className="rbac-detail-value">{acc.role}</span>
+                          </div>
+                        )}
+                        {acc.teams && (
+                          <div className="rbac-access-detail-item">
+                            <span className="rbac-detail-label">Times:</span>
+                            <span className="rbac-detail-value">{acc.teams}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

@@ -9,4 +9,5 @@ dist/
 !package*.json
 !tsconfig.json
 !next.config.js
+!data/matrix.json
 client_secret*.json

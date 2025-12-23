@@ -1,84 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../../auth";
+import { sql } from "@vercel/postgres";
 import Papa from "papaparse";
 
 // Lista de emails autorizados
 const ADMIN_EMAILS = process.env.ADMIN_EMAILS?.split(",") || [
   "ana.hernandes@vtex.com",
 ];
-
-// Função para salvar no KV (se disponível)
-async function saveToKV(data: any, timestamp: string) {
-  try {
-    const { kv } = await import("@vercel/kv");
-    await kv.set("rbac:matrix", JSON.stringify(data));
-    await kv.set("rbac:last-update", timestamp);
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-// Função para fazer commit automático no Git (opcional)
-async function commitToGit(data: any, timestamp: string) {
-  try {
-    const githubToken = process.env.GITHUB_TOKEN;
-    const repoOwner = process.env.GITHUB_REPO_OWNER || "anahernandes-vtex";
-    const repoName = process.env.GITHUB_REPO_NAME || "rbaciam-novo";
-
-    if (!githubToken) {
-      return false; // Sem token, não pode fazer commit
-    }
-
-    const { Octokit } = await import("@octokit/rest");
-    const octokit = new Octokit({ auth: githubToken });
-
-    // Obter conteúdo atual do arquivo
-    const filePath = "data/matrix.json";
-    const content = JSON.stringify(data, null, 2);
-    const encodedContent = Buffer.from(content).toString("base64");
-
-    try {
-      // Tentar obter SHA do arquivo existente
-      const { data: fileData } = await octokit.repos.getContent({
-        owner: repoOwner,
-        repo: repoName,
-        path: filePath,
-      });
-
-      const sha = (fileData as any).sha;
-
-      // Atualizar arquivo
-      await octokit.repos.createOrUpdateFileContents({
-        owner: repoOwner,
-        repo: repoName,
-        path: filePath,
-        message: `Atualizar matriz de acessos - ${timestamp}`,
-        content: encodedContent,
-        sha: sha,
-      });
-
-      return true;
-    } catch (error: any) {
-      if (error.status === 404) {
-        // Arquivo não existe, criar novo
-        await octokit.repos.createOrUpdateFileContents({
-          owner: repoOwner,
-          repo: repoName,
-          path: filePath,
-          message: `Criar matriz de acessos - ${timestamp}`,
-          content: encodedContent,
-        });
-        return true;
-      }
-      throw error;
-    }
-  } catch (error) {
-    console.error("Erro ao fazer commit no Git:", error);
-    return false;
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -113,6 +42,41 @@ export async function POST(request: NextRequest) {
           try {
             const data = results.data as any[];
 
+            // Criar tabelas se não existirem
+            await sql`
+              CREATE TABLE IF NOT EXISTS teams (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+              );
+            `;
+
+            await sql`
+              CREATE TABLE IF NOT EXISTS accesses (
+                id SERIAL PRIMARY KEY,
+                team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+                system VARCHAR(255) NOT NULL,
+                classification TEXT,
+                profile VARCHAR(255),
+                role VARCHAR(255),
+                teams TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(team_id, system)
+              );
+            `;
+
+            await sql`
+              CREATE TABLE IF NOT EXISTS last_update (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT single_row CHECK (id = 1)
+              );
+            `;
+
+            // Limpar dados antigos
+            await sql`DELETE FROM accesses`;
+            await sql`DELETE FROM teams`;
+
             // Agrupar por time
             const teamsMap = new Map<string, any[]>();
 
@@ -139,54 +103,51 @@ export async function POST(request: NextRequest) {
               });
             });
 
-            // Converter para array e ordenar
-            const teamsArray = Array.from(teamsMap.entries())
-              .map(([team, accesses]) => ({
-                team,
-                accesses: accesses.sort((a, b) =>
-                  a.system.localeCompare(b.system, "pt-BR")
-                ),
-              }))
-              .sort((a, b) => a.team.localeCompare(b.team, "pt-BR"));
+            // Inserir times e acessos
+            let totalTeams = 0;
+            let totalAccesses = 0;
 
-            const timestamp = new Date().toISOString();
-            const saveMethods: string[] = [];
+            for (const [teamName, accesses] of teamsMap.entries()) {
+              // Inserir time
+              const teamResult = await sql`
+                INSERT INTO teams (name)
+                VALUES (${teamName})
+                ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+                RETURNING id
+              `;
 
-            // Tentar salvar no KV primeiro
-            const savedToKV = await saveToKV(teamsArray, timestamp);
-            if (savedToKV) {
-              saveMethods.push("banco de dados (KV)");
-            }
+              const teamId = teamResult.rows[0].id;
 
-            // Tentar fazer commit no Git
-            const savedToGit = await commitToGit(teamsArray, timestamp);
-            if (savedToGit) {
-              saveMethods.push("Git (deploy automático)");
-            }
-
-            let message = `Matriz atualizada com sucesso! ${teamsArray.length} times e ${teamsArray.reduce(
-              (sum, t) => sum + t.accesses.length,
-              0
-            )} acessos processados.`;
-
-            if (saveMethods.length > 0) {
-              message += ` Salvo em: ${saveMethods.join(", ")}.`;
-              if (savedToGit) {
-                message += " A Vercel fará deploy automático em alguns minutos.";
+              // Inserir acessos
+              for (const access of accesses) {
+                await sql`
+                  INSERT INTO accesses (team_id, system, classification, profile, role, teams)
+                  VALUES (${teamId}, ${access.system}, ${access.classification}, ${access.profile}, ${access.role}, ${access.teams})
+                  ON CONFLICT (team_id, system) DO UPDATE SET
+                    classification = EXCLUDED.classification,
+                    profile = EXCLUDED.profile,
+                    role = EXCLUDED.role,
+                    teams = EXCLUDED.teams
+                `;
+                totalAccesses++;
               }
-            } else {
-              message += " ⚠️ Configure Upstash Redis ou GITHUB_TOKEN para salvar automaticamente.";
+              totalTeams++;
             }
+
+            // Atualizar timestamp
+            await sql`
+              INSERT INTO last_update (id, updated_at)
+              VALUES (1, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+            `;
 
             resolve(
               NextResponse.json({
-                message,
+                message: `Matriz atualizada com sucesso no banco de dados! ${totalTeams} times e ${totalAccesses} acessos processados.`,
                 count: {
-                  teams: teamsArray.length,
-                  accesses: teamsArray.reduce((sum, t) => sum + t.accesses.length, 0),
+                  teams: totalTeams,
+                  accesses: totalAccesses,
                 },
-                savedToKV,
-                savedToGit,
               })
             );
           } catch (error: any) {

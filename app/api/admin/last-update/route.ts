@@ -1,25 +1,20 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { sql } from "@vercel/postgres";
 
 export async function GET() {
   try {
-    // Tentar buscar do KV primeiro
+    // Tentar buscar do banco de dados
     try {
-      const { kv } = await import("@vercel/kv");
-      const lastUpdate = await kv.get<string>("rbac:last-update");
-      if (lastUpdate) {
-        return NextResponse.json({ lastUpdate });
+      const result = await sql`
+        SELECT updated_at FROM last_update WHERE id = 1
+      `;
+
+      if (result.rows.length > 0 && result.rows[0].updated_at) {
+        return NextResponse.json({ lastUpdate: result.rows[0].updated_at });
       }
     } catch (error) {
-      // KV não disponível, continuar
-    }
-
-    // Fallback: ler do arquivo
-    const timestampPath = path.join(process.cwd(), "data", ".last-update");
-    if (fs.existsSync(timestampPath)) {
-      const lastUpdate = fs.readFileSync(timestampPath, "utf-8");
-      return NextResponse.json({ lastUpdate });
+      // Tabela não existe ainda ou banco não configurado
+      console.log("Banco de dados não configurado");
     }
 
     return NextResponse.json({ lastUpdate: null });

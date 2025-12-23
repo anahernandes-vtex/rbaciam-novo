@@ -1,123 +1,138 @@
-# 🗄️ Configuração do Banco de Dados
+# 🗄️ Configuração do Banco de Dados - Vercel Postgres
 
-## ⚠️ Importante: Vercel KV agora está no Marketplace
+## Onde fazer upload do CSV?
 
-A Vercel mudou e o KV não está mais disponível diretamente. Você tem duas opções:
+1. **Faça login** na aplicação (https://seu-projeto.vercel.app)
+2. **Clique no botão "Admin"** no canto superior direito
+3. Você será levado para a página `/admin`
+4. **Selecione seu arquivo CSV** e clique em "Atualizar Matriz de Acessos"
 
-## Opção 1: Usar Upstash Redis (Recomendado)
+## Configuração do Banco de Dados Vercel Postgres
 
-### Passo 1: Criar Upstash Redis
+### Passo 1: Criar Banco de Dados Postgres
 
-1. Na tela de Storage da Vercel, clique em **"Upstash"** (ou acesse: https://vercel.com/marketplace/upstash)
-2. Clique em **"Add Integration"**
-3. Escolha **"Redis"**
-4. Escolha um nome para o banco
-5. Selecione a região
-6. Clique em **"Create"**
+1. Na Vercel, vá em **Storage** → **Create Database**
+2. Na tela que abrir, procure por **"Neon"** ou **"Postgres"** no Marketplace
+3. Clique em **"Neon"** (ou outro provedor Postgres)
+4. Clique em **"Add Integration"**
+5. Escolha um nome para o banco (ex: `rbac-postgres`)
+6. Selecione a região mais próxima
+7. Clique em **"Create"**
 
 ### Passo 2: Conectar ao Projeto
 
 1. Na página do seu projeto na Vercel
 2. Vá em **Settings** → **Storage**
-3. Você verá o Upstash Redis listado
+3. Você verá o banco Postgres listado
 4. As variáveis de ambiente serão adicionadas automaticamente:
-   - `UPSTASH_REDIS_REST_URL`
-   - `UPSTASH_REDIS_REST_TOKEN`
+   - `POSTGRES_URL`
+   - `POSTGRES_PRISMA_URL`
+   - `POSTGRES_URL_NON_POOLING`
+   - `POSTGRES_USER`
+   - `POSTGRES_HOST`
+   - `POSTGRES_PASSWORD`
+   - `POSTGRES_DATABASE`
 
-### Passo 3: Atualizar Código (Opcional)
-
-Se quiser usar Upstash diretamente, podemos ajustar o código. Mas o código atual já funciona com fallback para arquivo JSON!
-
-## Opção 2: Commit Automático no Git (Recomendado se não usar Redis)
-
-A aplicação pode fazer commit automático no Git quando você faz upload!
-
-### Configuração:
-
-1. **Criar Personal Access Token no GitHub:**
-   - Acesse: https://github.com/settings/tokens
-   - Clique em **"Generate new token"** → **"Generate new token (classic)"**
-   - Dê um nome (ex: "rbaciam-auto-update")
-   - Selecione escopo: **`repo`** (acesso completo aos repositórios)
-   - Clique em **"Generate token"**
-   - **Copie o token** (você só verá uma vez!)
-
-2. **Adicionar na Vercel:**
-   - Settings → Environment Variables
-   - Adicione:
-     ```
-     GITHUB_TOKEN=seu_token_aqui
-     GITHUB_REPO_OWNER=anahernandes-vtex
-     GITHUB_REPO_NAME=rbaciam-novo
-     ```
-
-3. **Fazer Redeploy**
-
-### Como funciona:
-
-- ✅ Upload de CSV funciona
-- ✅ Dados são processados
-- ✅ Commit automático no Git
-- ✅ Vercel faz deploy automático
-- ✅ Mudanças aparecem em alguns minutos!
-
-### Vantagens:
-
-- Não precisa configurar banco de dados
-- Atualização automática via Git
-- Histórico de mudanças no Git
-- Deploy automático pela Vercel
-
-## Opção 3: Usar Vercel Blob (Alternativa)
-
-1. Na tela de Storage, clique em **"Blob"**
-2. Crie um Blob Store
-3. Podemos ajustar o código para salvar JSON no Blob
-
-## Configuração de Admin
-
-Independente da opção escolhida, configure os emails de admin:
+### Passo 3: Configurar Emails de Admin
 
 1. **Settings** → **Environment Variables**
 2. Adicione:
    ```
-   ADMIN_EMAILS=ana.hernandes@vtex.com,outro@email.com
+   ADMIN_EMAILS=ana.hernandes@vtex.com
    ```
+   (Para múltiplos emails, separe por vírgula)
 
-## Recomendação
+### Passo 4: Fazer Redeploy
 
-**Para começar rápido:** Use a **Opção 2** (arquivo JSON). Já está funcionando!
+1. Vá em **Deployments**
+2. Clique nos **3 pontos** (⋯) do último deploy
+3. Clique em **"Redeploy"**
 
-**Para produção:** Configure **Upstash Redis** (Opção 1) para atualizações em tempo real sem precisar fazer deploy.
+## Como Funciona
 
-## Como Usar (Funciona com qualquer opção)
+### Estrutura do Banco de Dados
 
-1. Faça login na aplicação
-2. Clique no botão **"Admin"** no canto superior direito
-3. Selecione um arquivo CSV
-4. Clique em **"Atualizar Matriz de Acessos"**
-5. Os dados serão processados e salvos!
+O sistema cria automaticamente 3 tabelas:
 
-### Se usar arquivo JSON:
-- Os dados serão salvos no arquivo
-- Faça commit e push para atualizar em produção
-- Ou aguarde o próximo deploy automático
+1. **`teams`** - Armazena os times
+   - `id` - ID único
+   - `name` - Nome do time
+   - `created_at` - Data de criação
 
-### Se usar Upstash Redis:
-- Os dados serão salvos imediatamente
-- Atualização em tempo real, sem precisar de deploy
+2. **`accesses`** - Armazena os acessos de cada time
+   - `id` - ID único
+   - `team_id` - Referência ao time
+   - `system` - Nome do sistema
+   - `classification` - Tipo de acesso
+   - `profile` - Perfil
+   - `role` - Role
+   - `teams` - Times associados
+   - `created_at` - Data de criação
+
+3. **`last_update`** - Armazena última atualização
+   - `id` - Sempre 1 (tabela de linha única)
+   - `updated_at` - Timestamp da última atualização
+
+### Fluxo de Atualização
+
+1. Você faz upload do CSV na página `/admin`
+2. O sistema processa o CSV
+3. Limpa os dados antigos do banco
+4. Insere os novos dados
+5. Atualiza o timestamp
+6. **Pronto!** Os dados estão atualizados imediatamente
+
+### Leitura dos Dados
+
+- A página principal (`/`) busca dados do banco automaticamente
+- Se o banco não estiver configurado, usa o arquivo JSON como fallback
+- Tudo funciona automaticamente!
+
+## Vantagens do Postgres
+
+✅ **Dados persistentes** - Ficam salvos no banco
+✅ **Atualização imediata** - Sem precisar fazer deploy
+✅ **Escalável** - Suporta muitos dados
+✅ **Relacional** - Estrutura organizada
+✅ **Backup automático** - Neon faz backup automático
 
 ## Troubleshooting
 
-### "KV is not defined"
-- Normal se não configurou Upstash Redis
-- A aplicação usa fallback automático para arquivo JSON
+### Erro: "relation does not exist"
+- Normal na primeira vez
+- As tabelas são criadas automaticamente no primeiro upload
+- Tente fazer upload novamente
 
-### Mudanças não aparecem
-- Se usar arquivo JSON: faça commit e push
-- Se usar Redis: verifique se as variáveis de ambiente estão configuradas
+### Erro: "Connection refused"
+- Verifique se o banco Postgres está conectado ao projeto
+- Verifique as variáveis de ambiente na Vercel
+- Faça redeploy
 
-### Erro ao fazer upload
+### Dados não aparecem
+- Verifique se o upload foi bem-sucedido
+- Veja os logs na Vercel para erros
 - Verifique se o CSV está no formato correto
-- Verifique se você está logado como admin
-- Veja os logs na Vercel para mais detalhes
+
+### Não consigo acessar /admin
+- Verifique se seu email está em `ADMIN_EMAILS`
+- Faça logout e login novamente
+- Verifique se está autenticado
+
+## Formato do CSV
+
+O arquivo CSV deve ter as seguintes colunas:
+- `Time`
+- `Sistema`
+- `Acesso proposto Líder`
+- `Perfil`
+- `Role`
+- `times`
+
+## Pronto!
+
+Agora você pode:
+1. Fazer login na aplicação
+2. Clicar em "Admin"
+3. Fazer upload do CSV
+4. Os dados serão salvos no banco Postgres
+5. Atualização imediata na aplicação! 🎉

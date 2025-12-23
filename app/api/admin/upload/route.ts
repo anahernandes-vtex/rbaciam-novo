@@ -1,13 +1,84 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../../auth";
-import { kv } from "@vercel/kv";
 import Papa from "papaparse";
 
 // Lista de emails autorizados
 const ADMIN_EMAILS = process.env.ADMIN_EMAILS?.split(",") || [
   "ana.hernandes@vtex.com",
 ];
+
+// Função para salvar no KV (se disponível)
+async function saveToKV(data: any, timestamp: string) {
+  try {
+    const { kv } = await import("@vercel/kv");
+    await kv.set("rbac:matrix", JSON.stringify(data));
+    await kv.set("rbac:last-update", timestamp);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Função para fazer commit automático no Git (opcional)
+async function commitToGit(data: any, timestamp: string) {
+  try {
+    const githubToken = process.env.GITHUB_TOKEN;
+    const repoOwner = process.env.GITHUB_REPO_OWNER || "anahernandes-vtex";
+    const repoName = process.env.GITHUB_REPO_NAME || "rbaciam-novo";
+
+    if (!githubToken) {
+      return false; // Sem token, não pode fazer commit
+    }
+
+    const { Octokit } = await import("@octokit/rest");
+    const octokit = new Octokit({ auth: githubToken });
+
+    // Obter conteúdo atual do arquivo
+    const filePath = "data/matrix.json";
+    const content = JSON.stringify(data, null, 2);
+    const encodedContent = Buffer.from(content).toString("base64");
+
+    try {
+      // Tentar obter SHA do arquivo existente
+      const { data: fileData } = await octokit.repos.getContent({
+        owner: repoOwner,
+        repo: repoName,
+        path: filePath,
+      });
+
+      const sha = (fileData as any).sha;
+
+      // Atualizar arquivo
+      await octokit.repos.createOrUpdateFileContents({
+        owner: repoOwner,
+        repo: repoName,
+        path: filePath,
+        message: `Atualizar matriz de acessos - ${timestamp}`,
+        content: encodedContent,
+        sha: sha,
+      });
+
+      return true;
+    } catch (error: any) {
+      if (error.status === 404) {
+        // Arquivo não existe, criar novo
+        await octokit.repos.createOrUpdateFileContents({
+          owner: repoOwner,
+          repo: repoName,
+          path: filePath,
+          message: `Criar matriz de acessos - ${timestamp}`,
+          content: encodedContent,
+        });
+        return true;
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error("Erro ao fazer commit no Git:", error);
+    return false;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,20 +149,44 @@ export async function POST(request: NextRequest) {
               }))
               .sort((a, b) => a.team.localeCompare(b.team, "pt-BR"));
 
-            // Salvar no Vercel KV
-            await kv.set("rbac:matrix", JSON.stringify(teamsArray));
-            await kv.set("rbac:last-update", new Date().toISOString());
+            const timestamp = new Date().toISOString();
+            const saveMethods: string[] = [];
+
+            // Tentar salvar no KV primeiro
+            const savedToKV = await saveToKV(teamsArray, timestamp);
+            if (savedToKV) {
+              saveMethods.push("banco de dados (KV)");
+            }
+
+            // Tentar fazer commit no Git
+            const savedToGit = await commitToGit(teamsArray, timestamp);
+            if (savedToGit) {
+              saveMethods.push("Git (deploy automático)");
+            }
+
+            let message = `Matriz atualizada com sucesso! ${teamsArray.length} times e ${teamsArray.reduce(
+              (sum, t) => sum + t.accesses.length,
+              0
+            )} acessos processados.`;
+
+            if (saveMethods.length > 0) {
+              message += ` Salvo em: ${saveMethods.join(", ")}.`;
+              if (savedToGit) {
+                message += " A Vercel fará deploy automático em alguns minutos.";
+              }
+            } else {
+              message += " ⚠️ Configure Upstash Redis ou GITHUB_TOKEN para salvar automaticamente.";
+            }
 
             resolve(
               NextResponse.json({
-                message: `Matriz atualizada com sucesso! ${teamsArray.length} times e ${teamsArray.reduce(
-                  (sum, t) => sum + t.accesses.length,
-                  0
-                )} acessos processados.`,
+                message,
                 count: {
                   teams: teamsArray.length,
                   accesses: teamsArray.reduce((sum, t) => sum + t.accesses.length, 0),
                 },
+                savedToKV,
+                savedToGit,
               })
             );
           } catch (error: any) {
@@ -123,4 +218,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -1,123 +1,123 @@
-# 🗄️ Configuração do Banco de Dados - Vercel KV
+# 🗄️ Configuração do Banco de Dados
 
-## O que foi implementado
+## ⚠️ Importante: Vercel KV agora está no Marketplace
 
-Criamos um sistema de administração que permite atualizar a matriz de acessos diretamente na aplicação, sem precisar atualizar planilhas manualmente.
+A Vercel mudou e o KV não está mais disponível diretamente. Você tem duas opções:
 
-### Funcionalidades
+## Opção 1: Usar Upstash Redis (Recomendado)
 
-1. **Página de Admin** (`/admin`)
-   - Upload de arquivo CSV
-   - Processamento automático
-   - Armazenamento no Vercel KV (Redis)
+### Passo 1: Criar Upstash Redis
 
-2. **API Routes**
-   - `/api/admin/upload` - Processa e salva CSV
-   - `/api/admin/last-update` - Retorna última atualização
-   - `/api/matrix` - Retorna dados (KV ou fallback para JSON)
-
-3. **Integração**
-   - Página principal lê dados da API automaticamente
-   - Fallback para JSON estático se KV não estiver configurado
-
-## Configuração na Vercel
-
-### Passo 1: Criar Vercel KV Database
-
-1. Acesse: https://vercel.com/dashboard
-2. Vá em **Storage** → **Create Database**
-3. Selecione **KV** (Redis)
-4. Escolha um nome (ex: `rbac-kv`)
-5. Selecione a região mais próxima
-6. Clique em **Create**
+1. Na tela de Storage da Vercel, clique em **"Upstash"** (ou acesse: https://vercel.com/marketplace/upstash)
+2. Clique em **"Add Integration"**
+3. Escolha **"Redis"**
+4. Escolha um nome para o banco
+5. Selecione a região
+6. Clique em **"Create"**
 
 ### Passo 2: Conectar ao Projeto
 
 1. Na página do seu projeto na Vercel
 2. Vá em **Settings** → **Storage**
-3. Clique em **Connect** no banco KV criado
-4. Isso adicionará automaticamente as variáveis de ambiente:
-   - `KV_REST_API_URL`
-   - `KV_REST_API_TOKEN`
-   - `KV_REST_API_READ_ONLY_TOKEN`
+3. Você verá o Upstash Redis listado
+4. As variáveis de ambiente serão adicionadas automaticamente:
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
 
-### Passo 3: Configurar Emails de Admin
+### Passo 3: Atualizar Código (Opcional)
 
-1. Vá em **Settings** → **Environment Variables**
-2. Adicione a variável:
+Se quiser usar Upstash diretamente, podemos ajustar o código. Mas o código atual já funciona com fallback para arquivo JSON!
+
+## Opção 2: Commit Automático no Git (Recomendado se não usar Redis)
+
+A aplicação pode fazer commit automático no Git quando você faz upload!
+
+### Configuração:
+
+1. **Criar Personal Access Token no GitHub:**
+   - Acesse: https://github.com/settings/tokens
+   - Clique em **"Generate new token"** → **"Generate new token (classic)"**
+   - Dê um nome (ex: "rbaciam-auto-update")
+   - Selecione escopo: **`repo`** (acesso completo aos repositórios)
+   - Clique em **"Generate token"**
+   - **Copie o token** (você só verá uma vez!)
+
+2. **Adicionar na Vercel:**
+   - Settings → Environment Variables
+   - Adicione:
+     ```
+     GITHUB_TOKEN=seu_token_aqui
+     GITHUB_REPO_OWNER=anahernandes-vtex
+     GITHUB_REPO_NAME=rbaciam-novo
+     ```
+
+3. **Fazer Redeploy**
+
+### Como funciona:
+
+- ✅ Upload de CSV funciona
+- ✅ Dados são processados
+- ✅ Commit automático no Git
+- ✅ Vercel faz deploy automático
+- ✅ Mudanças aparecem em alguns minutos!
+
+### Vantagens:
+
+- Não precisa configurar banco de dados
+- Atualização automática via Git
+- Histórico de mudanças no Git
+- Deploy automático pela Vercel
+
+## Opção 3: Usar Vercel Blob (Alternativa)
+
+1. Na tela de Storage, clique em **"Blob"**
+2. Crie um Blob Store
+3. Podemos ajustar o código para salvar JSON no Blob
+
+## Configuração de Admin
+
+Independente da opção escolhida, configure os emails de admin:
+
+1. **Settings** → **Environment Variables**
+2. Adicione:
    ```
    ADMIN_EMAILS=ana.hernandes@vtex.com,outro@email.com
    ```
-   (Separe múltiplos emails por vírgula)
 
-3. Para usar na interface também, adicione:
-   ```
-   NEXT_PUBLIC_ADMIN_EMAILS=ana.hernandes@vtex.com,outro@email.com
-   ```
+## Recomendação
 
-### Passo 4: Fazer Redeploy
+**Para começar rápido:** Use a **Opção 2** (arquivo JSON). Já está funcionando!
 
-1. Vá em **Deployments**
-2. Clique nos **3 pontos** (⋯) do último deploy
-3. Clique em **"Redeploy"**
+**Para produção:** Configure **Upstash Redis** (Opção 1) para atualizações em tempo real sem precisar fazer deploy.
 
-## Como Usar
-
-### Para Administradores
+## Como Usar (Funciona com qualquer opção)
 
 1. Faça login na aplicação
 2. Clique no botão **"Admin"** no canto superior direito
-3. Na página de admin:
-   - Selecione um arquivo CSV
-   - Clique em **"Atualizar Matriz de Acessos"**
-   - Aguarde o processamento
-   - Os dados serão atualizados imediatamente!
+3. Selecione um arquivo CSV
+4. Clique em **"Atualizar Matriz de Acessos"**
+5. Os dados serão processados e salvos!
 
-### Formato do CSV
+### Se usar arquivo JSON:
+- Os dados serão salvos no arquivo
+- Faça commit e push para atualizar em produção
+- Ou aguarde o próximo deploy automático
 
-O arquivo CSV deve ter as seguintes colunas:
-- `Time`
-- `Sistema`
-- `Acesso proposto Líder`
-- `Perfil`
-- `Role`
-- `times`
-
-## Estrutura de Dados
-
-Os dados são armazenados no Vercel KV com as seguintes chaves:
-
-- `rbac:matrix` - Array JSON com todos os times e acessos
-- `rbac:last-update` - Timestamp da última atualização
-
-## Fallback
-
-Se o Vercel KV não estiver configurado, a aplicação usa automaticamente o arquivo `data/matrix.json` como fallback. Isso garante que a aplicação continue funcionando mesmo sem o banco de dados.
-
-## Segurança
-
-- Apenas emails listados em `ADMIN_EMAILS` podem acessar `/admin`
-- Todas as rotas de admin verificam autenticação
-- Upload de arquivo é validado antes do processamento
+### Se usar Upstash Redis:
+- Os dados serão salvos imediatamente
+- Atualização em tempo real, sem precisar de deploy
 
 ## Troubleshooting
 
-### Erro: "KV is not defined"
-- Verifique se o Vercel KV está conectado ao projeto
-- Verifique se as variáveis de ambiente estão configuradas
+### "KV is not defined"
+- Normal se não configurou Upstash Redis
+- A aplicação usa fallback automático para arquivo JSON
 
-### Erro: "Acesso negado"
-- Verifique se seu email está em `ADMIN_EMAILS`
-- Faça logout e login novamente
+### Mudanças não aparecem
+- Se usar arquivo JSON: faça commit e push
+- Se usar Redis: verifique se as variáveis de ambiente estão configuradas
 
-### Dados não atualizam
+### Erro ao fazer upload
 - Verifique se o CSV está no formato correto
-- Verifique os logs na Vercel para erros
-
-## Próximos Passos (Opcional)
-
-- [ ] Adicionar histórico de alterações
-- [ ] Permitir edição individual de acessos
-- [ ] Exportar dados para CSV
-- [ ] Migrar para Vercel Postgres para dados mais complexos
-
+- Verifique se você está logado como admin
+- Veja os logs na Vercel para mais detalhes

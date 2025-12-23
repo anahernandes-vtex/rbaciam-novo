@@ -13,6 +13,8 @@ const options: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
+  // Garante que a URL base está configurada corretamente
+  ...(process.env.NEXTAUTH_URL && { baseUrl: process.env.NEXTAUTH_URL }),
   callbacks: {
     async jwt({ token, account }) {
       if (account) {

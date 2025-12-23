@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import data from "../data/matrix.json";
 
+// Lista de emails autorizados para admin
+// Esta lista deve corresponder à variável ADMIN_EMAILS na Vercel
+const ADMIN_EMAILS = [
+  "ana.hernandes@vtex.com",
+];
+
 type Access = {
   system: string;
   classification: string;
@@ -18,7 +24,8 @@ type Team = {
   accesses: Access[];
 };
 
-const teams: Team[] = data as Team[];
+// Fallback para dados estáticos
+const staticTeams: Team[] = data as Team[];
 
 // Classifica o tipo de acesso com base no texto
 function getAccessType(classification: string): "automatic" | "request" | "other" {
@@ -42,6 +49,27 @@ export default function HomePage() {
   const [selectedTeamName, setSelectedTeamName] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [highlighted, setHighlighted] = useState<number | null>(null);
+  const [teams, setTeams] = useState<Team[]>(staticTeams);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Carregar dados da API
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const res = await fetch("/api/matrix");
+        if (res.ok) {
+          const apiData = await res.json();
+          setTeams(apiData);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+        // Manter dados estáticos em caso de erro
+      } finally {
+        setIsLoadingData(false);
+      }
+    }
+    loadData();
+  }, []);
 
   useEffect(() => {
     // Se o usuário não está autenticado, redireciona para login
@@ -189,6 +217,23 @@ export default function HomePage() {
             </div>
             {session?.user && (
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {ADMIN_EMAILS.includes(session.user.email || "") && (
+                  <button
+                    onClick={() => router.push("/admin")}
+                    style={{
+                      padding: "6px 12px",
+                      fontSize: "12px",
+                      border: "1px solid #ec4899",
+                      borderRadius: "6px",
+                      backgroundColor: "#fdf2f8",
+                      cursor: "pointer",
+                      color: "#be185d",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Admin
+                  </button>
+                )}
                 <span style={{ fontSize: "12px", color: "#6b7280" }}>
                   {session.user.email}
                 </span>
